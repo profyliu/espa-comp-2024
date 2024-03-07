@@ -193,7 +193,7 @@ if __name__ == '__main__':
     uid =market_info["uid"]
     market_type = market_info["market_type"]
     if market_type == 'DAM':
-        prices = market_info["previous"]["prices"]["EN"][bus_id]
+        prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
         required_times = [t for t in market_info['timestamps']]
         price_dict = {required_times[i]:prices[i] for i in range(len(required_times))}
         # Writing prices to a local JSON file
@@ -250,11 +250,14 @@ if __name__ == '__main__':
         with open(f'offer_{time_step}.json', 'w') as f:
             json.dump(offer_out_dict, f, indent=4, cls=NpEncoder)
     elif market_type == 'RTM':
-        price_path = "da_prices.json"
-        with open(price_path, "r") as file:
-            da_prices = json.load(file)
-            dam_times = [key for key in da_prices.keys()]
-            prices = [value for value in da_prices.values()]
+        # price_path = "da_prices.json"
+        # with open(price_path, "r") as file:
+        #     da_prices = json.load(file)
+        #     dam_times = [key for key in da_prices.keys()]
+        #     prices = [value for value in da_prices.values()]
+        da_prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
+        print("da_prices: ")
+        print(da_prices)
         # Read in information from the resource
         en_schedule_list = [z[0] for z in resource_info["ledger"][rid]["EN"].values()]
         sch_time = [z for z in resource_info["ledger"][rid]["EN"].keys()]
@@ -281,7 +284,10 @@ if __name__ == '__main__':
             this_hour_da_dispatch = this_hour_da_ledger[i][0]
         this_hour_da_price = da_prices[this_hour_timestamp]  # assuming for now that this is the actual da lmp. pending verification
         # print(f"this_hour_da_price = {this_hour_da_price}")
-        last_interval_rt_price = market_info['previous']['prices']['EN'][bus_id][0]  # assuming the first entry is the last interval
+        TSRTM_times = market_info['previous']['TSRTM']['times']
+        k = TSRTM_times.index(offer_timestamp)
+        print(f"k={k}")
+        last_interval_rt_price = market_info['previous']['TSRTM']['prices']['EN'][bus_id][k]  # assuming the first entry is the last interval
         if last_interval_rt_price == 0:
             last_interval_rt_price = this_hour_da_price  # if cannot find rt price, use this hour da price instead
         # print(f"last_interval_rt_price = {last_interval_rt_price}")
