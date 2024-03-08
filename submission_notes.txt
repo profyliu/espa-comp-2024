@@ -1,0 +1,2 @@
+module load python/3.7.0
+str_bus=CISD
