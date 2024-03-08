@@ -109,7 +109,7 @@ def da_offers(prices, cur_soc, required_times):
             delta2 = ((1/effcy - 1)*mid_lmp + hours2*beta1)/(1+1/effcy)
             L1_lo = mid_lmp - delta2
             #print(f"L1 = {L1} L1_lo = {L1_lo}")
-            price_points = np.linspace(start = L1, stop = L1_lo, num = n_blocks)
+            price_points = np.linspace(start = L1, stop = L1_lo - 1, num = n_blocks)  # -1 to generate different values in case L1 == L1_lo
             quantity_points = [chmax/n_blocks for i in range(n_blocks)]
             #print("price_points: ", price_points)
             #print("quantity_points: ", quantity_points)
@@ -130,7 +130,7 @@ def da_offers(prices, cur_soc, required_times):
             delta2 = ((1/effcy - 1)*mid_lmp + hours2*beta1)/(1+1/effcy)
             L2_up = mid_lmp + delta2
             #print(f"L2 = {L2} L2_up = {L2_up}")
-            price_points = np.linspace(start = L2, stop = L2_up, num = n_blocks)
+            price_points = np.linspace(start = L2, stop = L2_up + 1, num = n_blocks)  # +1 to generate difference values in case L2 == L2_up
             quantity_points = [dcmax/n_blocks for i in range(n_blocks)]
             block_dc_mc[required_times[i]] = list(price_points)
             block_dc_mq[required_times[i]] = list(quantity_points)            
@@ -202,7 +202,6 @@ if __name__ == '__main__':
         #     json.dump(price_dict, file)
         prices = np.array(prices)  # this is the da price of the previous da settlement mapped to the required_times of the upcoming da settlement
         cur_soc = resource_info['status'][rid]['soc']
-
         # Make the offer curves and unload into arrays
         block_ch_mc, block_ch_mq, block_dc_mc, block_dc_mq = da_offers(prices, cur_soc, required_times)
         block_soc_mc = {}
@@ -216,8 +215,14 @@ if __name__ == '__main__':
         rgu_dict = {}
         for r in reg:
             rgu_dict[r] = {}
-            for t in required_times:
-                rgu_dict[r][t] = 0
+        for t in required_times:
+            rgu_dict['cost_rgu'][t] = 77.3 / 24
+        for t in required_times:
+            rgu_dict['cost_rgd'][t] = 100       
+        for t in required_times:
+            rgu_dict['cost_spr'][t] = 200
+        for t in required_times:
+            rgu_dict['cost_nsp'][t] = 150
 
         max_dict = {}
         for mx in ['chmax', 'dcmax']:
