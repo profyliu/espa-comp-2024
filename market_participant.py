@@ -31,7 +31,7 @@ def da_offers(prices, cur_soc, required_times):
     chmax = batt_attr['chmax']  # 125 MW
     dcmax = batt_attr['dcmax']  # 125 MW
     beta1 = 77.3 / 24 # dollars per MWh in SOC per hour
-    target_end_soc = 375  # two-hours buffer for sell in extreme high lmp events
+    target_midday_soc = 375  # two-hours buffer for sell in extreme high lmp events
     
     n_blocks = 10
 
@@ -50,14 +50,14 @@ def da_offers(prices, cur_soc, required_times):
         discharge = [solver.NumVar(0, dcmax,  "d"+str(i)) for i in range(number_step)]
         dasoc = [solver.NumVar(socmin, socmax, "b"+str(i)) for i in range(number_step+1)]
         dasoc[0] = cur_soc
-
+        print(f"cur_soc: {cur_soc}")
     #Objective function
         solver.Maximize(
             sum(prices[i]*(discharge[i]-charge[i]) - beta1*dasoc[i] for i in range(number_step)) - beta1*dasoc[number_step])
             #sum(prices[i]*(discharge[i]-charge[i]) for i in range(number_step)))
         for i in range(number_step):
             solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
-        solver.Add(dasoc[23] >= target_end_soc)
+        solver.Add(dasoc[16] >= target_midday_soc)  # 5 pm 
         solver.Solve()
         # print("Solution:")
         # print("The Storage's profit =", solver.Objective().Value())
@@ -69,7 +69,7 @@ def da_offers(prices, cur_soc, required_times):
             discharge_list.append(discharge[i].solution_value())
             #dasoc_list.append(dasoc[i].solution_value())
         df = pd.DataFrame({'ch': charge_list, 'dc': discharge_list})
-        #print(df)
+        print(df)
         return charge_list,discharge_list
 
 
@@ -193,13 +193,13 @@ if __name__ == '__main__':
     uid =market_info["uid"]
     market_type = market_info["market_type"]
     if market_type == 'DAM':
-        prices = market_info["previous"]["prices"]["EN"][bus_id]
+        prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
         required_times = [t for t in market_info['timestamps']]
         price_dict = {required_times[i]:prices[i] for i in range(len(required_times))}
         # Writing prices to a local JSON file
-        file_path = "da_prices.json"
-        with open(file_path, "w") as file:
-            json.dump(price_dict, file)
+        # file_path = "da_prices.json"
+        # with open(file_path, "w") as file:
+        #     json.dump(price_dict, file)
         prices = np.array(prices)  # this is the da price of the previous da settlement mapped to the required_times of the upcoming da settlement
         cur_soc = resource_info['status'][rid]['soc']
 
@@ -250,11 +250,15 @@ if __name__ == '__main__':
         with open(f'offer_{time_step}.json', 'w') as f:
             json.dump(offer_out_dict, f, indent=4, cls=NpEncoder)
     elif market_type == 'RTM':
-        price_path = "da_prices.json"
-        with open(price_path, "r") as file:
-            da_prices = json.load(file)
-            dam_times = [key for key in da_prices.keys()]
-            prices = [value for value in da_prices.values()]
+        # price_path = "da_prices.json"
+        # with open(price_path, "r") as file:
+        #     da_prices = json.load(file)
+        #     dam_times = [key for key in da_prices.keys()]
+        #     prices = [value for value in da_prices.values()
+        da_timestamps = market_info['previous']['TSDAM']['times']
+        da_prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
+        #print("da_prices: ")
+        #print(da_prices)
         # Read in information from the resource
         en_schedule_list = [z[0] for z in resource_info["ledger"][rid]["EN"].values()]
         sch_time = [z for z in resource_info["ledger"][rid]["EN"].keys()]
@@ -279,13 +283,14 @@ if __name__ == '__main__':
                     max_price = this_entry[1]
                     max_price_index = i
             this_hour_da_dispatch = this_hour_da_ledger[i][0]
-        this_hour_da_price = da_prices[this_hour_timestamp]  # assuming for now that this is the actual da lmp. pending verification
+        this_hour_da_price = da_prices[da_timestamps.index(this_hour_timestamp)]  # assuming for now that this is the actual da lmp. pending verification
         # print(f"this_hour_da_price = {this_hour_da_price}")
-        last_interval_rt_price = market_info['previous']['prices']['EN'][bus_id][0]  # assuming the first entry is the last interval
+        TSRTM_times = market_info['previous']['TSRTM']['times']
+        k = TSRTM_times.index(offer_timestamp)
+        last_interval_rt_price = market_info['previous']['TSRTM']['prices']['EN'][bus_id][k]*12  # multiply by 12 because of the way the TSRTM value is provided
         if last_interval_rt_price == 0:
             last_interval_rt_price = this_hour_da_price  # if cannot find rt price, use this hour da price instead
-        # print(f"last_interval_rt_price = {last_interval_rt_price}")
-
+        print(f"last_interval_rt_price = {last_interval_rt_price}")
         # initialize 
         block_ch_mc = {}
         block_ch_mq = {}
