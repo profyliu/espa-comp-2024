@@ -58,6 +58,7 @@ def da_offers(prices, cur_soc, required_times):
         for i in range(number_step):
             solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
         solver.Add(dasoc[16] >= target_midday_soc)  # 5 pm 
+        solver.Add(dasoc[23] == cur_soc)  # end of day back to beginning
         solver.Solve()
         # print("Solution:")
         # print("The Storage's profit =", solver.Objective().Value())
@@ -176,15 +177,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('time_step', type=int, help='Integer time step tracking the progress of the\
                         simulated market.')
-    parser.add_argument('market_info', help='json formatted dictionary with market information.')
-    parser.add_argument('resource_info', help='json formatted dictionary with resource information.')
+    parser.add_argument('market_file', help='json formatted dictionary with market information.')
+    parser.add_argument('resource_file', help='json formatted dictionary with resource information.')
 
     args = parser.parse_args()
 
     # Parse json inputs into python dictionaries
     time_step = args.time_step
-    market_info = json.loads(args.market_info)
-    resource_info = json.loads(args.resource_info)
+    args = parser.parse_args()
+    with open(args.market_file, 'r') as f:
+        market_info = json.load(f)
+    with open(args.resource_file, 'r') as f:
+        resource_info = json.load(f)
     
     #rid = 'R00229'  # where does this designation come from? Need to verify. 
     rid = resource_info['rid']
@@ -216,7 +220,7 @@ if __name__ == '__main__':
         for r in reg:
             rgu_dict[r] = {}
         for t in required_times:
-            rgu_dict['cost_rgu'][t] = 77.3 / 24
+            rgu_dict['cost_rgu'][t] = 100
         for t in required_times:
             rgu_dict['cost_rgd'][t] = 100       
         for t in required_times:
