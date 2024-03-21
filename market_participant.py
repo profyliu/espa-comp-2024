@@ -166,7 +166,7 @@ def rt_offers(this_hour_da_price, this_hour_da_dispatch, last_interval_rt_price,
             block_dc_mc = {offer_timestamp: [5*last_interval_rt_price]}
             block_dc_mq = {offer_timestamp: [dcmax]}
         else:
-            block_dc_mc = {offer_timestamp: [4*last_interval_rt_price/5]}
+            block_dc_mc = {offer_timestamp: [2*last_interval_rt_price/5]}
             block_dc_mq = {offer_timestamp: [dcmax]}
             block_ch_mc = {offer_timestamp: [this_hour_da_price]}
             block_ch_mq = {offer_timestamp: [chmax]}
