@@ -252,11 +252,11 @@ if __name__ == '__main__':
     if market_type == 'TSDAM':
         prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
         required_times = [t for t in market_info['timestamps']]
-        price_dict = {required_times[i]:prices[i] for i in range(len(required_times))}
+        # price_dict = {required_times[i]:prices[i] for i in range(len(required_times))}
         # Writing prices to a local JSON file
-        file_path = "DAM_da_prices_" + str(time_step) + ".json"
-        with open(file_path, "w") as file:
-            json.dump(price_dict, file)
+        # file_path = "DAM_da_prices_" + str(time_step) + ".json"
+        # with open(file_path, "w") as file:
+        #     json.dump(price_dict, file)
         prices = np.array(prices)  # this is the da price of the previous da settlement mapped to the required_times of the upcoming da settlement
         cur_soc = resource_info['status'][rid]['soc']
         # Make the offer curves and unload into arrays
@@ -319,13 +319,13 @@ if __name__ == '__main__':
         #     prices = [value for value in da_prices.values()
         da_timestamps = market_info['previous']['TSDAM']['times']
         da_prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
-        price_dict = {da_timestamps[i]:da_prices[i] for i in range(len(da_timestamps))}
-        date_value = da_timestamps[0][0:-4]
+        # price_dict = {da_timestamps[i]:da_prices[i] for i in range(len(da_timestamps))}
+        # date_value = da_timestamps[0][0:-4]
         # Writing prices to a local JSON file
-        file_path = "RTM_da_prices_" + date_value + ".json"
-        if not os.path.exists(file_path):
-            with open(file_path, "w") as file:
-                json.dump(price_dict, file)
+        # file_path = "RTM_da_prices_" + date_value + ".json"
+        # if not os.path.exists(file_path):
+        #     with open(file_path, "w") as file:
+        #         json.dump(price_dict, file)
         #print("da_prices: ")
         #print(da_prices)
         # Read in information from the resource
