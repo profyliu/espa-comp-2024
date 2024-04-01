@@ -6,6 +6,7 @@ import argparse
 import json
 import datetime
 from itertools import accumulate
+import os
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -21,8 +22,7 @@ class NpEncoder(json.JSONEncoder):
 
 batt_attr = {'cost_rgu': 3, 'cost_rgd': 3, 'cost_spr': 0, 'cost_nsp': 0, 'init_en': 0, 'init_status': 1, 'ramp_dn': 9999, 'ramp_up': 9999, 'block_ch_mc': '0', 'block_dc_mc': '0', 'block_soc_mc': '0', 'chmax': 125.0, 'dcmax': 125.0, 'block_ch_mq': '125.0', 'block_dc_mq': '125.0', 'block_soc_mq': '608.0', 'soc_end': 128.0, 'soc_begin': 480.0, 'socmax': 608.0, 'socmin': 128.0, 'eff_ch': 0.8919999999999999, 'eff_dc': 1.0, 'imax': 1000, 'imin': -1000, 'vmax': 820, 'vmin': 680, 'ch_cap': 3413.3333333333335, 'eff_coul': 0.946, 'eff_inv0': 0.0, 'eff_inv1': 0.99531, 'eff_inv2': -0.00027348, 'voc0': 669.282, 'voc1': 201.004, 'voc2': -368.742, 'voc3': 320.377, 'resis': 0.000365333, 'therm_cap': 36000, 'temp_max': 60, 'temp_min': -20, 'temp_ref': 20, 'Utherm': 4.800000000000001, 'deg_DoD0': 0.0616, 'deg_DoD1': 0.537, 'deg_DoD2': 3.3209, 'deg_DoD3': -6.8292, 'deg_DoD4': 5.7905, 'deg_soc': 1.04, 'deg_therm': 0.0693, 'deg_time': 5.708e-06, 'cycle_life': 10950, 'cost_EoL': -187200000.0, 'socref': 320.0, 'soc_capacity': 640, 'cell_count': 250}
 
-#calculate the opportunity cost for charge/discharge in the DA market
-def da_offers(prices, cur_soc, required_times):
+def da_offers_perfect_information(prices, cur_soc, required_times):
     # battery parameters
     global batt_attr
     socmax = batt_attr['socmax']  # 608 MWh
@@ -31,7 +31,7 @@ def da_offers(prices, cur_soc, required_times):
     chmax = batt_attr['chmax']  # 125 MW
     dcmax = batt_attr['dcmax']  # 125 MW
     beta1 = 77.3 / 24 # dollars per MWh in SOC per hour
-    target_midday_soc = 375  # two-hours buffer for sell in extreme high lmp events
+    target_midday_soc = 500  # three-hours buffer for sell in extreme high lmp events
     
     n_blocks = 10
 
@@ -57,7 +57,60 @@ def da_offers(prices, cur_soc, required_times):
             #sum(prices[i]*(discharge[i]-charge[i]) for i in range(number_step)))
         for i in range(number_step):
             solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
-        solver.Add(dasoc[16] >= target_midday_soc)  # 5 pm 
+        solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
+        solver.Add(dasoc[23] == cur_soc)  # end of day back to beginning
+        solver.Solve()
+        # print("Solution:")
+        # print("The Storage's profit =", solver.Objective().Value())
+        charge_list=[]
+        discharge_list=[]
+        dasoc_list=[]
+        for i in range(number_step):
+            charge_list.append(charge[i].solution_value())
+            discharge_list.append(discharge[i].solution_value())
+            #dasoc_list.append(dasoc[i].solution_value())
+        df = pd.DataFrame({'ch': charge_list, 'dc': discharge_list})
+        print(df)
+        return charge_list,discharge_list
+
+
+#calculate the opportunity cost for charge/discharge in the DA market
+def da_offers(prices, cur_soc, required_times):
+    # battery parameters
+    global batt_attr
+    socmax = batt_attr['socmax']  # 608 MWh
+    socmin = batt_attr['socmin']  # 128 MWh
+    effcy=batt_attr['eff_ch']
+    chmax = batt_attr['chmax']  # 125 MW
+    dcmax = batt_attr['dcmax']  # 125 MW
+    beta1 = 77.3 / 24 # dollars per MWh in SOC per hour
+    target_midday_soc = 500  # three-hours buffer for sell in extreme high lmp events
+    
+    n_blocks = 10
+
+    def scheduler(prices):
+
+        number_step =len(prices)
+        # [START solver]
+        # Create the linear solver with the GLOP backend.
+        solver = pywraplp.Solver.CreateSolver("GLOP")
+        if not solver:
+            return
+        # [END solver]
+
+    #Variables: all are continous
+        charge = [solver.NumVar(0.0, chmax, "c"+str(i)) for i in range(number_step)]
+        discharge = [solver.NumVar(0, dcmax,  "d"+str(i)) for i in range(number_step)]
+        dasoc = [solver.NumVar(socmin, socmax, "b"+str(i)) for i in range(number_step+1)]
+        dasoc[0] = cur_soc
+        print(f"cur_soc: {cur_soc}")
+    #Objective function
+        solver.Maximize(
+            sum(prices[i]*(discharge[i]-charge[i]) - beta1*dasoc[i] for i in range(number_step)) - beta1*dasoc[number_step])
+            #sum(prices[i]*(discharge[i]-charge[i]) for i in range(number_step)))
+        for i in range(number_step):
+            solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
+        solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
         solver.Add(dasoc[23] == cur_soc)  # end of day back to beginning
         solver.Solve()
         # print("Solution:")
@@ -196,14 +249,14 @@ if __name__ == '__main__':
     # Read in information from the market
     uid =market_info["uid"]
     market_type = market_info["market_type"]
-    if market_type == 'DAM':
+    if market_type == 'TSDAM':
         prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
         required_times = [t for t in market_info['timestamps']]
         price_dict = {required_times[i]:prices[i] for i in range(len(required_times))}
         # Writing prices to a local JSON file
-        # file_path = "da_prices.json"
-        # with open(file_path, "w") as file:
-        #     json.dump(price_dict, file)
+        file_path = "DAM_da_prices_" + str(time_step) + ".json"
+        with open(file_path, "w") as file:
+            json.dump(price_dict, file)
         prices = np.array(prices)  # this is the da price of the previous da settlement mapped to the required_times of the upcoming da settlement
         cur_soc = resource_info['status'][rid]['soc']
         # Make the offer curves and unload into arrays
@@ -258,7 +311,7 @@ if __name__ == '__main__':
         # Save as json file in the current directory with name offer_{time_step}.json
         with open(f'offer_{time_step}.json', 'w') as f:
             json.dump(offer_out_dict, f, indent=4, cls=NpEncoder)
-    elif market_type == 'RTM':
+    elif market_type == 'TSRTM':
         # price_path = "da_prices.json"
         # with open(price_path, "r") as file:
         #     da_prices = json.load(file)
@@ -266,6 +319,13 @@ if __name__ == '__main__':
         #     prices = [value for value in da_prices.values()
         da_timestamps = market_info['previous']['TSDAM']['times']
         da_prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
+        price_dict = {da_timestamps[i]:da_prices[i] for i in range(len(da_timestamps))}
+        date_value = da_timestamps[0][0:-4]
+        # Writing prices to a local JSON file
+        file_path = "RTM_da_prices_" + date_value + ".json"
+        if not os.path.exists(file_path):
+            with open(file_path, "w") as file:
+                json.dump(price_dict, file)
         #print("da_prices: ")
         #print(da_prices)
         # Read in information from the resource
