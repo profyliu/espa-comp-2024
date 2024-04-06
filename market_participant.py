@@ -245,7 +245,7 @@ if __name__ == '__main__':
     
     #rid = 'R00229'  # where does this designation come from? Need to verify. 
     rid = resource_info['rid']
-    bus_id = 'CISD'
+    bus_id = resource_info['bus']
     # Read in information from the market
     uid =market_info["uid"]
     market_type = market_info["market_type"]
