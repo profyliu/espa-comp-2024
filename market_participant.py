@@ -249,7 +249,7 @@ if __name__ == '__main__':
     # Read in information from the market
     uid =market_info["uid"]
     market_type = market_info["market_type"]
-    if market_type == 'TSDAM':
+    if 'DAM' in market_type:
         prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
         required_times = [t for t in market_info['timestamps']]
         # price_dict = {required_times[i]:prices[i] for i in range(len(required_times))}
@@ -311,7 +311,7 @@ if __name__ == '__main__':
         # Save as json file in the current directory with name offer_{time_step}.json
         with open(f'offer_{time_step}.json', 'w') as f:
             json.dump(offer_out_dict, f, indent=4, cls=NpEncoder)
-    elif market_type == 'TSRTM':
+    elif 'RTM' in market_type:
         # price_path = "da_prices.json"
         # with open(price_path, "r") as file:
         #     da_prices = json.load(file)
@@ -368,35 +368,18 @@ if __name__ == '__main__':
         block_soc_mc = {}
         block_soc_mq = {}
         required_times = [t for t in market_info['timestamps']]
-        for i in range(len(required_times)):
-            block_ch_mc[required_times[i]] = 0.0
-            block_ch_mq[required_times[i]] = 0.0
-            block_dc_mc[required_times[i]] = 0.0
-            block_dc_mq[required_times[i]] = 0.0
-            block_soc_mc[required_times[i]] = 0.0
-            block_soc_mq[required_times[i]] = 0.0
 
         block_ch_mc_1, block_ch_mq_1, block_dc_mc_1, block_dc_mq_1 = rt_offers(this_hour_da_price, 
                                                                        this_hour_da_dispatch, 
                                                                        last_interval_rt_price, 
-                                                                       offer_timestamp)
-        # print("RT offer update 1:")
-        # print(block_ch_mq_1)
-        # print(block_ch_mc_1)
-        # print(block_dc_mq_1)
-        # print(block_dc_mc_1)
-
-        block_ch_mc.update(block_ch_mc_1)
-        block_ch_mq.update(block_ch_mq_1)
-        block_dc_mc.update(block_dc_mc_1)
-        block_dc_mq.update(block_dc_mq_1)
-        #block_ch_mc, block_ch_mq, block_dc_mc, block_dc_mq = rt_offers(this_hour_da_price = 30.5, this_hour_da_dispatch = 0, last_interval_rt_price = 1000, offer_timestamp = "202401280610")
-        # print("RT offers:")
-        # print(block_dc_mc)
-        # print(block_dc_mq)
-        # print(block_ch_mc)
-        # print(block_ch_mq)
-
+                                                                       offer_timestamp)        
+        for i in range(len(required_times)):
+            block_ch_mc[required_times[i]] = block_ch_mc_1[offer_timestamp]
+            block_ch_mq[required_times[i]] = block_ch_mq_1[offer_timestamp]
+            block_dc_mc[required_times[i]] = block_dc_mc_1[offer_timestamp]
+            block_dc_mq[required_times[i]] = block_dc_mq_1[offer_timestamp]
+            block_soc_mc[required_times[i]] = 0.0
+            block_soc_mq[required_times[i]] = 0.0
 
         reg = ['cost_rgu', 'cost_rgd', 'cost_spr', 'cost_nsp']
         zero_arr = np.zeros(len(required_times))
