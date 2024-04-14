@@ -22,60 +22,8 @@ class NpEncoder(json.JSONEncoder):
 
 batt_attr = {'cost_rgu': 3, 'cost_rgd': 3, 'cost_spr': 0, 'cost_nsp': 0, 'init_en': 0, 'init_status': 1, 'ramp_dn': 9999, 'ramp_up': 9999, 'block_ch_mc': '0', 'block_dc_mc': '0', 'block_soc_mc': '0', 'chmax': 125.0, 'dcmax': 125.0, 'block_ch_mq': '125.0', 'block_dc_mq': '125.0', 'block_soc_mq': '608.0', 'soc_end': 128.0, 'soc_begin': 480.0, 'socmax': 608.0, 'socmin': 128.0, 'eff_ch': 0.8919999999999999, 'eff_dc': 1.0, 'imax': 1000, 'imin': -1000, 'vmax': 820, 'vmin': 680, 'ch_cap': 3413.3333333333335, 'eff_coul': 0.946, 'eff_inv0': 0.0, 'eff_inv1': 0.99531, 'eff_inv2': -0.00027348, 'voc0': 669.282, 'voc1': 201.004, 'voc2': -368.742, 'voc3': 320.377, 'resis': 0.000365333, 'therm_cap': 36000, 'temp_max': 60, 'temp_min': -20, 'temp_ref': 20, 'Utherm': 4.800000000000001, 'deg_DoD0': 0.0616, 'deg_DoD1': 0.537, 'deg_DoD2': 3.3209, 'deg_DoD3': -6.8292, 'deg_DoD4': 5.7905, 'deg_soc': 1.04, 'deg_therm': 0.0693, 'deg_time': 5.708e-06, 'cycle_life': 10950, 'cost_EoL': -187200000.0, 'socref': 320.0, 'soc_capacity': 640, 'cell_count': 250}
 
-def da_offers_perfect_information(prices, cur_soc, required_times):
-    # battery parameters
-    global batt_attr
-    socmax = batt_attr['socmax']  # 608 MWh
-    socmin = batt_attr['socmin']  # 128 MWh
-    effcy=batt_attr['eff_ch']
-    chmax = batt_attr['chmax']  # 125 MW
-    dcmax = batt_attr['dcmax']  # 125 MW
-    beta1 = 77.3 / 24 # dollars per MWh in SOC per hour
-    target_midday_soc = 500  # three-hours buffer for sell in extreme high lmp events
-    
-    n_blocks = 10
-
-    def scheduler(prices):
-
-        number_step =len(prices)
-        # [START solver]
-        # Create the linear solver with the GLOP backend.
-        solver = pywraplp.Solver.CreateSolver("GLOP")
-        if not solver:
-            return
-        # [END solver]
-
-    #Variables: all are continous
-        charge = [solver.NumVar(0.0, chmax, "c"+str(i)) for i in range(number_step)]
-        discharge = [solver.NumVar(0, dcmax,  "d"+str(i)) for i in range(number_step)]
-        dasoc = [solver.NumVar(socmin, socmax, "b"+str(i)) for i in range(number_step+1)]
-        dasoc[0] = cur_soc
-        print(f"cur_soc: {cur_soc}")
-    #Objective function
-        solver.Maximize(
-            sum(prices[i]*(discharge[i]-charge[i]) - beta1*dasoc[i] for i in range(number_step)) - beta1*dasoc[number_step])
-            #sum(prices[i]*(discharge[i]-charge[i]) for i in range(number_step)))
-        for i in range(number_step):
-            solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
-        solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
-        solver.Add(dasoc[23] == cur_soc)  # end of day back to beginning
-        solver.Solve()
-        # print("Solution:")
-        # print("The Storage's profit =", solver.Objective().Value())
-        charge_list=[]
-        discharge_list=[]
-        dasoc_list=[]
-        for i in range(number_step):
-            charge_list.append(charge[i].solution_value())
-            discharge_list.append(discharge[i].solution_value())
-            #dasoc_list.append(dasoc[i].solution_value())
-        df = pd.DataFrame({'ch': charge_list, 'dc': discharge_list})
-        print(df)
-        return charge_list,discharge_list
-
-
 #calculate the opportunity cost for charge/discharge in the DA market
-def da_offers(prices, cur_soc, required_times):
+def da_offers(bus_id, required_times):
     # battery parameters
     global batt_attr
     socmax = batt_attr['socmax']  # 608 MWh
@@ -86,108 +34,21 @@ def da_offers(prices, cur_soc, required_times):
     beta1 = 77.3 / 24 # dollars per MWh in SOC per hour
     target_midday_soc = 500  # three-hours buffer for sell in extreme high lmp events
     
-    n_blocks = 10
-
-    def scheduler(prices):
-
-        number_step =len(prices)
-        # [START solver]
-        # Create the linear solver with the GLOP backend.
-        solver = pywraplp.Solver.CreateSolver("GLOP")
-        if not solver:
-            return
-        # [END solver]
-
-    #Variables: all are continous
-        charge = [solver.NumVar(0.0, chmax, "c"+str(i)) for i in range(number_step)]
-        discharge = [solver.NumVar(0, dcmax,  "d"+str(i)) for i in range(number_step)]
-        dasoc = [solver.NumVar(socmin, socmax, "b"+str(i)) for i in range(number_step+1)]
-        dasoc[0] = cur_soc
-        print(f"cur_soc: {cur_soc}")
-    #Objective function
-        solver.Maximize(
-            sum(prices[i]*(discharge[i]-charge[i]) - beta1*dasoc[i] for i in range(number_step)) - beta1*dasoc[number_step])
-            #sum(prices[i]*(discharge[i]-charge[i]) for i in range(number_step)))
-        for i in range(number_step):
-            solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
-        solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
-        solver.Add(dasoc[23] == cur_soc)  # end of day back to beginning
-        solver.Solve()
-        # print("Solution:")
-        # print("The Storage's profit =", solver.Objective().Value())
-        charge_list=[]
-        discharge_list=[]
-        dasoc_list=[]
-        for i in range(number_step):
-            charge_list.append(charge[i].solution_value())
-            discharge_list.append(discharge[i].solution_value())
-            #dasoc_list.append(dasoc[i].solution_value())
-        df = pd.DataFrame({'ch': charge_list, 'dc': discharge_list})
-        print(df)
-        return charge_list,discharge_list
-
-
-    [charge_list,discharge_list]=scheduler(prices)
-    #combine the charge/discharge list
-    reversed_charge_list = [-ch if ch>0 else ch for ch in charge_list]
-    combined_list = [reversed_charge if dis == 0 else dis for reversed_charge, dis in zip(reversed_charge_list, discharge_list)]
-    #finding the index for first charge and last discharge
-    t1_ch = next((index for index, value in enumerate(combined_list) if value < 0), len(prices))
-    t_last_dis = next((index for index in range(len(combined_list) - 1, -1, -1) if combined_list[index] > 0), 0)
     
     block_ch_mc = {required_times[i]:0 for i in range(len(required_times))}
     block_ch_mq = {required_times[i]:0 for i in range(len(required_times))}
     block_dc_mc = {required_times[i]:0 for i in range(len(required_times))}
     block_dc_mq = {required_times[i]:0 for i in range(len(required_times))}
-    if t1_ch > t_last_dis:
-        # return no offer
-        pass
+    
+    low_hours = {'CISD':[9,10,11], 'SPPC':[3,4,5], 'PNM':[9,10,11]}
+    high_hours = {'CISD':[19,20,21], 'SPPC':[20,21,22], 'PNM':[19,20,21]}
 
-    else:
-        # find the max price of charge and min price of discharge
-        max_ch_lmp = max(prices[list(index for index, value in enumerate(combined_list) if value < 0)])
-        min_dc_lmp = min(prices[list(index for index, value in enumerate(combined_list) if value > 0)])
-        mid_lmp = (max_ch_lmp + min_dc_lmp)/2
-        #print(f"max_ch_lmp = {max_ch_lmp}")
-        #print(f"min_dc_lmp = {min_dc_lmp}")
-        # formulate charging block offers
-        for i in list(index for index, value in enumerate(combined_list) if value < 0):
-            # hours until first discharge
-            hours = next((index for index, value in enumerate(combined_list[i:]) if value > 0), len(prices)-i)
-            delta = ((1/effcy - 1)*mid_lmp + hours*beta1)/(1+1/effcy)
-            L1 = mid_lmp - delta # L1: maximum start charging price
-            L2 = mid_lmp + delta # L2: minimum start discharge price
-            # hours until last discharge in the first discharge sequence
-            hours2 = hours + next((index for index, value in enumerate(combined_list[(i+hours+1):]) if value <= 0), 0)
-            #print(f"charging hours = {hours}, hours2 = {hours2}")
-            delta2 = ((1/effcy - 1)*mid_lmp + hours2*beta1)/(1+1/effcy)
-            L1_lo = mid_lmp - delta2
-            #print(f"L1 = {L1} L1_lo = {L1_lo}")
-            price_points = np.linspace(start = L1, stop = L1_lo - 1, num = n_blocks)  # -1 to generate different values in case L1 == L1_lo
-            quantity_points = [chmax/n_blocks for i in range(n_blocks)]
-            #print("price_points: ", price_points)
-            #print("quantity_points: ", quantity_points)
-            block_ch_mc[required_times[i]] = list(price_points)
-            block_ch_mq[required_times[i]] = list(quantity_points)
-        # formulate discharge block offers
-        for i in list(index for index, value in enumerate(combined_list) if value > 0):
-            # hours lapsed since the last charge hour
-            reverse_list = combined_list[0:i]
-            reverse_list.reverse()
-            hours = 1 + next((index for index, value in enumerate(reverse_list) if value < 0), i)
-            delta = ((1/effcy - 1)*mid_lmp + hours*beta1)/(1+1/effcy)
-            L2 = mid_lmp + delta # L2: minimum start discharge price
-            reverse_list = combined_list[0:i-hours]
-            reverse_list.reverse()
-            hours2 = hours + next((index for index, value in enumerate(reverse_list) if value >=0), i-hours)
-            #print(f'discharge hours: {hours} hours2: {hours2}')
-            delta2 = ((1/effcy - 1)*mid_lmp + hours2*beta1)/(1+1/effcy)
-            L2_up = mid_lmp + delta2
-            #print(f"L2 = {L2} L2_up = {L2_up}")
-            price_points = np.linspace(start = L2, stop = L2_up + 1, num = n_blocks)  # +1 to generate difference values in case L2 == L2_up
-            quantity_points = [dcmax/n_blocks for i in range(n_blocks)]
-            block_dc_mc[required_times[i]] = list(price_points)
-            block_dc_mq[required_times[i]] = list(quantity_points)            
+    for i in low_hours[bus_id]:
+        block_ch_mc[required_times[i]] = 8
+        block_ch_mq[required_times[i]] = 125
+    for i in high_hours[bus_id]:
+        block_dc_mc[required_times[i]] = 12
+        block_dc_mq[required_times[i]] = 125
     return block_ch_mc, block_ch_mq, block_dc_mc, block_dc_mq
 
 def rt_offers(this_hour_da_price, this_hour_da_dispatch, last_interval_rt_price, offer_timestamp):
@@ -219,7 +80,7 @@ def rt_offers(this_hour_da_price, this_hour_da_dispatch, last_interval_rt_price,
             block_dc_mc = {offer_timestamp: [5*last_interval_rt_price]}
             block_dc_mq = {offer_timestamp: [dcmax]}
         else:
-            block_dc_mc = {offer_timestamp: [2*last_interval_rt_price/5]}
+            block_dc_mc = {offer_timestamp: [4*last_interval_rt_price/5]}
             block_dc_mq = {offer_timestamp: [dcmax]}
             block_ch_mc = {offer_timestamp: [this_hour_da_price]}
             block_ch_mq = {offer_timestamp: [chmax]}
@@ -245,22 +106,22 @@ if __name__ == '__main__':
     
     #rid = 'R00229'  # where does this designation come from? Need to verify. 
     rid = resource_info['rid']
-    bus_id = 'CISD'
+    bus_id = resource_info['bus']
     # Read in information from the market
     uid =market_info["uid"]
     market_type = market_info["market_type"]
-    if market_type == 'TSDAM':
+    if 'DAM' in market_type:
         prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
         required_times = [t for t in market_info['timestamps']]
-        price_dict = {required_times[i]:prices[i] for i in range(len(required_times))}
+        # price_dict = {required_times[i]:prices[i] for i in range(len(required_times))}
         # Writing prices to a local JSON file
-        file_path = "DAM_da_prices_" + str(time_step) + ".json"
-        with open(file_path, "w") as file:
-            json.dump(price_dict, file)
+        # file_path = "DAM_da_prices_" + str(time_step) + ".json"
+        # with open(file_path, "w") as file:
+        #     json.dump(price_dict, file)
         prices = np.array(prices)  # this is the da price of the previous da settlement mapped to the required_times of the upcoming da settlement
         cur_soc = resource_info['status'][rid]['soc']
         # Make the offer curves and unload into arrays
-        block_ch_mc, block_ch_mq, block_dc_mc, block_dc_mq = da_offers(prices, cur_soc, required_times)
+        block_ch_mc, block_ch_mq, block_dc_mc, block_dc_mq = da_offers(bus_id, required_times)
         block_soc_mc = {}
         block_soc_mq = {}
         for i in range(len(required_times)):
@@ -311,7 +172,7 @@ if __name__ == '__main__':
         # Save as json file in the current directory with name offer_{time_step}.json
         with open(f'offer_{time_step}.json', 'w') as f:
             json.dump(offer_out_dict, f, indent=4, cls=NpEncoder)
-    elif market_type == 'TSRTM':
+    elif 'RTM' in market_type:
         # price_path = "da_prices.json"
         # with open(price_path, "r") as file:
         #     da_prices = json.load(file)
@@ -319,13 +180,13 @@ if __name__ == '__main__':
         #     prices = [value for value in da_prices.values()
         da_timestamps = market_info['previous']['TSDAM']['times']
         da_prices = market_info["previous"]["TSDAM"]["prices"]["EN"][bus_id]
-        price_dict = {da_timestamps[i]:da_prices[i] for i in range(len(da_timestamps))}
-        date_value = da_timestamps[0][0:-4]
+        # price_dict = {da_timestamps[i]:da_prices[i] for i in range(len(da_timestamps))}
+        # date_value = da_timestamps[0][0:-4]
         # Writing prices to a local JSON file
-        file_path = "RTM_da_prices_" + date_value + ".json"
-        if not os.path.exists(file_path):
-            with open(file_path, "w") as file:
-                json.dump(price_dict, file)
+        # file_path = "RTM_da_prices_" + date_value + ".json"
+        # if not os.path.exists(file_path):
+        #     with open(file_path, "w") as file:
+        #         json.dump(price_dict, file)
         #print("da_prices: ")
         #print(da_prices)
         # Read in information from the resource
@@ -368,35 +229,18 @@ if __name__ == '__main__':
         block_soc_mc = {}
         block_soc_mq = {}
         required_times = [t for t in market_info['timestamps']]
-        for i in range(len(required_times)):
-            block_ch_mc[required_times[i]] = 0.0
-            block_ch_mq[required_times[i]] = 0.0
-            block_dc_mc[required_times[i]] = 0.0
-            block_dc_mq[required_times[i]] = 0.0
-            block_soc_mc[required_times[i]] = 0.0
-            block_soc_mq[required_times[i]] = 0.0
 
         block_ch_mc_1, block_ch_mq_1, block_dc_mc_1, block_dc_mq_1 = rt_offers(this_hour_da_price, 
                                                                        this_hour_da_dispatch, 
                                                                        last_interval_rt_price, 
-                                                                       offer_timestamp)
-        # print("RT offer update 1:")
-        # print(block_ch_mq_1)
-        # print(block_ch_mc_1)
-        # print(block_dc_mq_1)
-        # print(block_dc_mc_1)
-
-        block_ch_mc.update(block_ch_mc_1)
-        block_ch_mq.update(block_ch_mq_1)
-        block_dc_mc.update(block_dc_mc_1)
-        block_dc_mq.update(block_dc_mq_1)
-        #block_ch_mc, block_ch_mq, block_dc_mc, block_dc_mq = rt_offers(this_hour_da_price = 30.5, this_hour_da_dispatch = 0, last_interval_rt_price = 1000, offer_timestamp = "202401280610")
-        # print("RT offers:")
-        # print(block_dc_mc)
-        # print(block_dc_mq)
-        # print(block_ch_mc)
-        # print(block_ch_mq)
-
+                                                                       offer_timestamp)        
+        for i in range(len(required_times)):
+            block_ch_mc[required_times[i]] = block_ch_mc_1[offer_timestamp]
+            block_ch_mq[required_times[i]] = block_ch_mq_1[offer_timestamp]
+            block_dc_mc[required_times[i]] = block_dc_mc_1[offer_timestamp]
+            block_dc_mq[required_times[i]] = block_dc_mq_1[offer_timestamp]
+            block_soc_mc[required_times[i]] = 0.0
+            block_soc_mq[required_times[i]] = 0.0
 
         reg = ['cost_rgu', 'cost_rgd', 'cost_spr', 'cost_nsp']
         zero_arr = np.zeros(len(required_times))
@@ -434,6 +278,3 @@ if __name__ == '__main__':
         # Save as json file in the current directory with name offer_{time_step}.json
         with open(f'offer_{time_step}.json', 'w') as f:
             json.dump(offer_out_dict, f, indent=4, cls=NpEncoder)
-
-
-
