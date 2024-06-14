@@ -31,7 +31,8 @@ def da_offers_perfect_information(prices, cur_soc, required_times):
     chmax = batt_attr['chmax']  # 125 MW
     dcmax = batt_attr['dcmax']  # 125 MW
     beta1 = 77.3 / 24 # dollars per MWh in SOC per hour
-    target_midday_soc = 500  # three-hours buffer for sell in extreme high lmp events
+    target_midday_soc = 300  # three-hours buffer for sell in extreme high lmp events
+    max_endday_soc = 100
     
     n_blocks = 10
 
@@ -58,7 +59,7 @@ def da_offers_perfect_information(prices, cur_soc, required_times):
         for i in range(number_step):
             solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
         solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
-        solver.Add(dasoc[23] == cur_soc)  # end of day back to beginning
+        solver.Add(dasoc[23] <= max_endday_soc)  # end of day back to beginning
         solver.Solve()
         # print("Solution:")
         # print("The Storage's profit =", solver.Objective().Value())
@@ -84,8 +85,8 @@ def da_offers(prices, cur_soc, required_times):
     chmax = batt_attr['chmax']  # 125 MW
     dcmax = batt_attr['dcmax']  # 125 MW
     beta1 = 77.3 / 24 # dollars per MWh in SOC per hour
-    target_midday_soc = 500  # three-hours buffer for sell in extreme high lmp events
-    
+    target_midday_soc = 300  # three-hours buffer for sell in extreme high lmp events
+    max_endday_soc = 100
     n_blocks = 10
 
     def scheduler(prices):
@@ -111,7 +112,7 @@ def da_offers(prices, cur_soc, required_times):
         for i in range(number_step):
             solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
         solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
-        solver.Add(dasoc[23] == cur_soc)  # end of day back to beginning
+        solver.Add(dasoc[23] <= max_endday_soc)  # end of day back to beginning
         solver.Solve()
         # print("Solution:")
         # print("The Storage's profit =", solver.Objective().Value())
@@ -215,11 +216,11 @@ def rt_offers(this_hour_da_price, this_hour_da_dispatch, last_interval_rt_price,
         block_ch_mc = {offer_timestamp:list(price_points)}
         block_ch_mq = {offer_timestamp:quantity_points}
     else:
-        if last_interval_rt_price < 3*this_hour_da_price:
-            block_dc_mc = {offer_timestamp: [5*last_interval_rt_price]}
+        if last_interval_rt_price < 2*this_hour_da_price:
+            block_dc_mc = {offer_timestamp: [3*last_interval_rt_price]}
             block_dc_mq = {offer_timestamp: [dcmax]}
         else:
-            block_dc_mc = {offer_timestamp: [4*last_interval_rt_price/5]}
+            block_dc_mc = {offer_timestamp: [2*last_interval_rt_price/5]}
             block_dc_mq = {offer_timestamp: [dcmax]}
             block_ch_mc = {offer_timestamp: [this_hour_da_price]}
             block_ch_mq = {offer_timestamp: [chmax]}
