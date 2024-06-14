@@ -205,25 +205,10 @@ def rt_offers(this_hour_da_price, this_hour_da_dispatch, last_interval_rt_price,
     block_dc_mc = {offer_timestamp: 0}
     block_dc_mq = {offer_timestamp: 0}
     
-    if this_hour_da_dispatch > 0:  # discharge
-        price_points = np.linspace(start = this_hour_da_price/(n_blocks/2), stop = 2*this_hour_da_price, num = n_blocks)
-        quantity_points = [this_hour_da_dispatch/(n_blocks/2) for i in range(n_blocks//2)] + [(dcmax-this_hour_da_dispatch)/(n_blocks/2) for i in range(n_blocks//2)]
-        block_dc_mc = {offer_timestamp: list(price_points)}
-        block_dc_mq = {offer_timestamp: quantity_points}
-    elif this_hour_da_dispatch < 0:  # charge
-        price_points = np.linspace(start = (2 - 1/(n_blocks/2))*this_hour_da_price, stop = 0, num = n_blocks)
-        quantity_points = [-this_hour_da_dispatch/(n_blocks/2) for i in range(n_blocks//2)] + [(chmax + this_hour_da_dispatch)/(n_blocks/2) for i in range(n_blocks//2)]
-        block_ch_mc = {offer_timestamp:list(price_points)}
-        block_ch_mq = {offer_timestamp:quantity_points}
-    else:
-        if last_interval_rt_price < 2*this_hour_da_price:
-            block_dc_mc = {offer_timestamp: [3*last_interval_rt_price]}
-            block_dc_mq = {offer_timestamp: [dcmax]}
-        else:
-            block_dc_mc = {offer_timestamp: [2*last_interval_rt_price/5]}
-            block_dc_mq = {offer_timestamp: [dcmax]}
-            block_ch_mc = {offer_timestamp: [this_hour_da_price]}
-            block_ch_mq = {offer_timestamp: [chmax]}
+    block_dc_mc = {offer_timestamp: [200]}
+    block_dc_mq = {offer_timestamp: [dcmax]}
+    block_ch_mc = {offer_timestamp: [0]}
+    block_ch_mq = {offer_timestamp: [chmax]}
     return block_ch_mc, block_ch_mq, block_dc_mc, block_dc_mq
 
 if __name__ == '__main__':
