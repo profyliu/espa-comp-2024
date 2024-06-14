@@ -58,7 +58,7 @@ def da_offers_perfect_information(prices, cur_soc, required_times):
             #sum(prices[i]*(discharge[i]-charge[i]) for i in range(number_step)))
         for i in range(number_step):
             solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
-        solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
+        #solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
         solver.Add(dasoc[23] <= max_endday_soc)  # end of day back to beginning
         solver.Solve()
         # print("Solution:")
