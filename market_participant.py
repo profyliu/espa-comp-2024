@@ -85,7 +85,7 @@ def da_offers(prices, cur_soc, required_times):
     chmax = batt_attr['chmax']  # 125 MW
     dcmax = batt_attr['dcmax']  # 125 MW
     beta1 = 77.3 / 24 # dollars per MWh in SOC per hour
-    target_midday_soc = 300  # three-hours buffer for sell in extreme high lmp events
+    target_midday_soc = 400  # three-hours buffer for sell in extreme high lmp events
     max_endday_soc = 100
     n_blocks = 10
 
@@ -111,7 +111,7 @@ def da_offers(prices, cur_soc, required_times):
             #sum(prices[i]*(discharge[i]-charge[i]) for i in range(number_step)))
         for i in range(number_step):
             solver.Add(dasoc[i] + effcy*charge[i] - discharge[i]==dasoc[i+1])
-        #solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
+        solver.Add(dasoc[17] >= target_midday_soc)  # 5 pm 
         #solver.Add(dasoc[23] <= max_endday_soc)  # end of day back to beginning
         solver.Solve()
         # print("Solution:")
